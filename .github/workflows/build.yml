@@ -1,0 +1,58 @@
+# Builds DigicoAuxBridge.exe on a Windows machine at GitHub.
+# - Every push and pull request: runs the tests, builds the .exe, uploads it as a downloadable artifact.
+# - Pushing a tag like v1.0.1: also creates a GitHub Release with the zipped app attached.
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: End-to-end tests (simulated console)
+        run: node tools/test-e2e.js
+
+      - name: Build .exe
+        run: node build/build.js --exe
+
+      - name: Smoke test the .exe
+        shell: pwsh
+        run: |
+          $dir = "dist\DigicoAuxBridge"
+          '{"web":{"port":18123},"console":{"sendPort":18124,"receivePort":18125},"ipad":{"sendPort":18126,"receivePort":18127}}' |
+            Set-Content "$env:RUNNER_TEMP\smoke.json"
+          $p = Start-Process "$dir\DigicoAuxBridge.exe" -ArgumentList '--config', "$env:RUNNER_TEMP\smoke.json" -PassThru
+          Start-Sleep -Seconds 3
+          $r = Invoke-WebRequest http://127.0.0.1:18123/healthz -UseBasicParsing
+          Stop-Process $p
+          if ($r.StatusCode -ne 200) { throw "exe did not serve /healthz" }
+
+      - name: Zip
+        shell: pwsh
+        run: Compress-Archive -Path dist\DigicoAuxBridge -DestinationPath DigicoAuxBridge-windows.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DigicoAuxBridge-windows
+          path: DigicoAuxBridge-windows.zip
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: DigicoAuxBridge-windows.zip
+          generate_release_notes: true

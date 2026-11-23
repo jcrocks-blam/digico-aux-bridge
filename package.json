@@ -1,0 +1,16 @@
+{
+  "name": "digico-aux-bridge",
+  "version": "1.0.0",
+  "description": "OSC bridge: DiGiCo console <-> DiGiCo iPad app + web page controlling one aux",
+  "main": "src/main.js",
+  "private": true,
+  "scripts": {
+    "start": "node src/main.js",
+    "sim": "node tools/simulator.js --surface",
+    "test": "node tools/test-e2e.js",
+    "build": "node build/build.js",
+    "build:exe": "node build/build.js --exe"
+  },
+  "engines": { "node": ">=22" },
+  "license": "MIT"
+}

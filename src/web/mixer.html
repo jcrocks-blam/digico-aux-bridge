@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e0f11">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.json">
+<title>Aux Mix</title>
+<style>
+  :root {
+    --bg: #0e0f11; --panel: #17191c; --row: #1c1f23; --line: #2a2e33;
+    --text: #e9ebee; --muted: #8b939c; --accent: #f2a541; --accent-dim: #6b4b1f;
+    --ok: #4cc38a; --bad: #ef5b5b; --warn: #f2a541;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { padding-bottom: env(safe-area-inset-bottom); }
+  header { position: sticky; top: 0; z-index: 5; background: var(--bg);
+    padding: calc(10px + env(safe-area-inset-top)) 16px 10px; border-bottom: 1px solid var(--line); }
+  .top { display: flex; align-items: center; gap: 10px; }
+  h1 { margin: 0; font-size: 19px; font-weight: 650; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .auxpick { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .auxpick .chev { color: var(--accent); font-size: 14px; flex: none; }
+  .auxpick select { position: absolute; inset: 0; width: 100%; opacity: 0; font-size: 16px; cursor: pointer; }
+  .auxpick.locked { cursor: default; } .auxpick.locked .chev, .auxpick.locked select { display: none; }
+  h1 small { color: var(--muted); font-weight: 500; font-size: 14px; margin-left: 6px; }
+  .pill { font-size: 12px; padding: 4px 9px; border-radius: 99px; border: 1px solid var(--line);
+    color: var(--muted); white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+  .pill i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; }
+  .pill.ok i { background: var(--ok); } .pill.bad i { background: var(--bad); } .pill.warn i { background: var(--warn); }
+  .search { margin-top: 10px; display: flex; gap: 8px; }
+  .search input { flex: 1; min-width: 0; background: var(--panel); border: 1px solid var(--line); color: var(--text);
+    border-radius: 10px; padding: 9px 12px; font-size: 16px; }
+  .search button { background: var(--panel); color: var(--muted); border: 1px solid var(--line);
+    border-radius: 10px; padding: 0 12px; font-size: 14px; }
+  .search button.on { color: var(--accent); border-color: var(--accent-dim); }
+  .banner { display: none; margin: 10px 16px 0; padding: 10px 12px; border-radius: 10px;
+    background: #3a1d1d; color: #ffd6d6; font-size: 14px; }
+  .banner.show { display: block; }
+  main { padding: 8px 12px 24px; max-width: 760px; margin: 0 auto; }
+  .row { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center;
+    background: var(--row); border-radius: 12px; padding: 10px 12px 12px; margin: 8px 0; }
+  .row.hidden { display: none; }
+  .label { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+  .num { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; min-width: 22px; }
+  .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .name.empty { color: var(--muted); font-weight: 500; }
+  .db { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; text-align: right; min-width: 64px; }
+  .row.active .db { color: var(--accent); }
+  .ctl { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; }
+  .step { width: 40px; height: 40px; flex: none; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--text); font-size: 22px; line-height: 1; touch-action: manipulation; }
+  .step:active { background: var(--line); }
+  .track { position: relative; flex: 1; height: 44px; touch-action: pan-y; cursor: ew-resize; }
+  .rail { position: absolute; left: 0; right: 0; top: 19px; height: 6px; border-radius: 3px; background: #2d3137; }
+  .fill { position: absolute; left: 0; top: 19px; height: 6px; border-radius: 3px; background: var(--accent-dim); }
+  .row.active .fill { background: var(--accent); }
+  .unity { position: absolute; top: 12px; width: 2px; height: 20px; background: #4a5058; left: 75%; }
+  .knob { position: absolute; top: 6px; width: 22px; height: 32px; margin-left: -11px; border-radius: 6px;
+    background: #d7dadf; box-shadow: 0 1px 3px rgba(0,0,0,.6); }
+  .knob::after { content: ""; position: absolute; left: 3px; right: 3px; top: 15px; height: 2px; background: #333; }
+  .row.unknown .knob { display: none; } .row.unknown .fill { display: none; }
+  .empty-state { color: var(--muted); text-align: center; padding: 40px 16px; }
+  .empty-state.hide { display: none; }
+  /* edit mode: pick which channels this phone shows */
+  .editbar { display: none; margin-top: 10px; gap: 8px; align-items: center; flex-wrap: wrap; }
+  body.editing .editbar { display: flex; }
+  body.editing .search { display: none; }
+  .editbar span { color: var(--muted); font-size: 13px; flex: 1 1 100%; }
+  .editbar button { background: var(--panel); color: var(--text); border: 1px solid var(--line);
+    border-radius: 10px; padding: 8px 12px; font-size: 14px; }
+  .editbar button.done { margin-left: auto; background: var(--accent); color: #1a1205; border: 0; font-weight: 700; }
+  .vis { display: none; flex: none; width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--ok); font-size: 18px; }
+  body.editing .vis { display: block; }
+  body.editing .row { cursor: pointer; }
+  body.editing .ctl { pointer-events: none; opacity: .35; }
+  body.editing .row.off { opacity: .45; }
+  body.editing .row.off .vis { color: var(--muted); }
+  #edit { background: var(--panel); color: var(--muted); border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; font-size: 14px; }
+  .count { color: var(--muted); font-size: 13px; text-align: center; padding: 4px 0 0; }
+  .pinbox { position: fixed; inset: 0; background: var(--bg); display: none; z-index: 20;
+    align-items: center; justify-content: center; padding: 16px; }
+  .pinbox.show { display: flex; }
+  .pinbox form { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; width: 100%; max-width: 320px; }
+  .pinbox h2 { margin: 0 0 12px; font-size: 18px; }
+  .pinbox input { width: 100%; font-size: 22px; letter-spacing: 4px; text-align: center; padding: 10px;
+    border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+  .pinbox button { margin-top: 12px; width: 100%; padding: 12px; border-radius: 10px; border: 0;
+    background: var(--accent); color: #1a1205; font-weight: 700; font-size: 16px; }
+  .pinbox .err { color: var(--bad); font-size: 14px; min-height: 18px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <label class="auxpick" id="auxPick" title="Choose aux">
+      <h1 id="title">Aux Mix</h1><span class="chev" aria-hidden="true">▾</span>
+      <select id="auxSel" aria-label="Aux mix"></select>
+    </label>
+    <span class="pill" id="conn"><i></i><span>Connecting</span></span>
+  </div>
+  <div class="search">
+    <input id="filter" type="search" placeholder="Find channel" autocomplete="off">
+    <button id="activeOnly" title="Show only channels that are up in this mix">In mix</button>
+    <button id="edit" title="Choose which channels this device shows">Edit</button>
+  </div>
+  <div class="editbar">
+    <span>Tap channels to show or hide them on this device. Faders are locked while editing.</span>
+    <button id="showAll">Show all</button>
+    <button id="hideAll">Hide all</button>
+    <button id="hideOff">Hide unused</button>
+    <button id="done" class="done">Done</button>
+  </div>
+</header>
+<div class="banner" id="banner"></div>
+<main id="list"><div class="empty-state">Waiting for the console…</div></main>
+<div class="empty-state hide" id="noneShown"></div>
+
+<div class="pinbox" id="pinbox">
+  <form id="pinform">
+    <h2>Enter PIN</h2>
+    <input id="pin" inputmode="numeric" autocomplete="off" type="password">
+    <button type="submit">Connect</button>
+    <div class="err" id="pinerr"></div>
+  </form>
+</div>
+
+<script>
+(() => {
+  // ---- fader taper: position 0..1 <-> dB (unity at 75%) ----
+  const TAPER = [[0, -150], [0.04, -70], [0.15, -40], [0.3, -20], [0.5, -10], [0.75, 0], [1, 10]];
+  const posToDb = p => {
+    p = Math.min(1, Math.max(0, p));
+    for (let i = 1; i < TAPER.length; i++) {
+      const [p0, d0] = TAPER[i - 1], [p1, d1] = TAPER[i];
+      if (p <= p1) return d0 + (d1 - d0) * (p - p0) / (p1 - p0);
+    }
+    return 10;
+  };
+  const dbToPos = d => {
+    if (d == null) return 0;
+    d = Math.min(10, Math.max(-150, d));
+    for (let i = 1; i < TAPER.length; i++) {
+      const [p0, d0] = TAPER[i - 1], [p1, d1] = TAPER[i];
+      if (d <= d1) return p0 + (p1 - p0) * (d - d0) / (d1 - d0);
+    }
+    return 1;
+  };
+  const OFF = -100;
+  const fmt = d => d == null ? '—' : d <= OFF ? '−∞' : (d > 0 ? '+' : d < 0 ? '−' : '') + Math.abs(d).toFixed(1);
+
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch {} }
+  };
+
+  const $ = id => document.getElementById(id);
+  const list = $('list');
+  const rows = new Map(); // ch -> { el, db, name, hold, dragging }
+  let ws, myId = 0, state = null, consoleUp = false, retry = 500;
+  let activeOnly = store.get('activeOnly') === '1';
+  $('activeOnly').classList.toggle('on', activeOnly);
+  let editing = false;
+  // Aux choice: a link like /?aux=3 locks this page to aux 3; otherwise the phone remembers the last pick
+  const urlAux = Number(new URLSearchParams(location.search).get('aux')) || 0;
+  const lockedAux = urlAux > 0;
+  const wantAux = () => urlAux || Number(store.get('aux')) || 0;
+  if (lockedAux) $('auxPick').classList.add('locked');
+  let auxes = [];
+  // Channels hidden on this device, remembered per aux (a phone may be used for different mixes)
+  let hidden = new Set(), hiddenKey = '';
+  function loadHidden(aux) {
+    const key = 'hidden-aux-' + aux;
+    if (key === hiddenKey) return;
+    hiddenKey = key;
+    try { hidden = new Set(JSON.parse(store.get(key) || '[]')); } catch { hidden = new Set(); }
+  }
+  function saveHidden() { store.set(hiddenKey, JSON.stringify([...hidden].sort((a, b) => a - b))); }
+
+  // ---- connection ----
+  function connect() {
+    setConn('warn', 'Connecting');
+    ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+    ws.onopen = () => { retry = 500; ws.send(JSON.stringify({ t: 'hello', role: 'mixer', pin: store.get('pin') || '', aux: wantAux() })); };
+    ws.onmessage = ev => onMsg(JSON.parse(ev.data));
+    ws.onclose = () => {
+      setConn('bad', 'Offline'); showBanner('Lost connection to the bridge. Reconnecting…');
+      setTimeout(connect, retry); retry = Math.min(5000, retry * 2);
+    };
+  }
+
+  function onMsg(m) {
+    if (m.t === 'auth') {
+      if (!m.ok) { $('pinbox').classList.add('show'); if (store.get('pin')) $('pinerr').textContent = 'Wrong PIN'; return; }
+      $('pinbox').classList.remove('show'); myId = m.id;
+      if (m.title) document.title = m.title;
+    } else if (m.t === 'state') {
+      if (state && state.aux !== m.aux) resetRows(); // switched aux: drop any in-flight holds
+      state = m; auxes = m.auxes || []; render();
+    } else if (m.t === 'auxes') {
+      auxes = m.auxes;
+      if (state) { state.auxName = m.auxName; paintTitle(); }
+    } else if (m.t === 'status') {
+      consoleUp = m.console.connected;
+      if (consoleUp) { setConn('ok', 'Live'); showBanner(''); }
+      else { setConn('bad', 'Console offline'); showBanner('The bridge can’t reach the console. Changes won’t be heard until it reconnects.'); }
+    } else if (m.t === 'level') {
+      if (!state || m.aux !== state.aux) return;
+      const r = rows.get(m.ch); if (!r) return;
+      if (m.src === 'web' && m.origin === myId) return; // our own move coming back
+      if (r.dragging || Date.now() < r.hold) { r.remote = m.db; return; } // apply once we let go
+      setRow(r, m.db);
+    } else if (m.t === 'name') {
+      const r = rows.get(m.ch); if (!r) return;
+      r.name = m.name; paintName(r); applyFilter();
+    }
+  }
+
+  function setConn(kind, text) { const c = $('conn'); c.className = 'pill ' + kind; c.lastChild.textContent = text; }
+  function showBanner(text) { const b = $('banner'); b.textContent = text; b.classList.toggle('show', !!text); }
+
+  // ---- rendering ----
+  function paintTitle() {
+    $('title').innerHTML = state.auxName ? `${escapeHtml(state.auxName)}<small>Aux ${state.aux}</small>` : `Aux ${state.aux}`;
+    document.title = state.auxName ? `${state.auxName} – Aux Mix` : `Aux ${state.aux} – Aux Mix`;
+    const sel = $('auxSel');
+    sel.innerHTML = auxes.map(a => `<option value="${a.aux}">${a.aux}${a.name ? ' – ' + escapeHtml(a.name) : ''}</option>`).join('');
+    sel.value = String(state.aux);
+    $('auxPick').classList.toggle('locked', lockedAux || auxes.length < 2);
+  }
+
+  function resetRows() {
+    for (const r of rows.values()) { r.hold = 0; r.remote = undefined; r.dragging = false; clearTimeout(r.holdTimer); }
+    for (const t of sendTimers.values()) clearTimeout(t.id);
+    sendTimers.clear();
+  }
+
+  function render() {
+    paintTitle();
+    if (!lockedAux) store.set('aux', String(state.aux));
+    loadHidden(state.aux);
+    if (!state.channels.length) { list.innerHTML = '<div class="empty-state">Waiting for the console…</div>'; rows.clear(); return; }
+    const keep = new Set();
+    let empty = list.querySelector('.empty-state'); if (empty) empty.remove();
+    for (const c of state.channels) {
+      keep.add(c.ch);
+      let r = rows.get(c.ch);
+      if (!r) { r = makeRow(c.ch); rows.set(c.ch, r); list.appendChild(r.el); }
+      r.name = c.name; paintName(r);
+      if (!r.dragging && Date.now() >= r.hold) setRow(r, c.db);
+    }
+    for (const [ch, r] of rows) if (!keep.has(ch)) { r.el.remove(); rows.delete(ch); }
+    applyFilter();
+  }
+
+  function makeRow(ch) {
+    const el = document.createElement('div');
+    el.className = 'row unknown';
+    el.innerHTML = `<div class="label"><button class="vis" aria-label="Show or hide">●</button><span class="num">${ch}</span><span class="name"></span></div>
+      <div class="db">—</div>
+      <div class="ctl"><button class="step" aria-label="Down 1 dB">−</button>
+      <div class="track"><div class="rail"></div><div class="fill"></div><div class="unity"></div><div class="knob"></div></div>
+      <button class="step" aria-label="Up 1 dB">+</button></div>`;
+    const r = { ch, el, db: null, name: '', hold: 0, dragging: false,
+      track: el.querySelector('.track'), knob: el.querySelector('.knob'), fill: el.querySelector('.fill'),
+      dbEl: el.querySelector('.db'), nameEl: el.querySelector('.name') };
+    const [down, up] = el.querySelectorAll('.step');
+    down.onclick = () => nudge(r, -1);
+    up.onclick = () => nudge(r, +1);
+    el.addEventListener('click', () => {
+      if (!editing) return;
+      hidden.has(ch) ? hidden.delete(ch) : hidden.add(ch);
+      saveHidden(); applyFilter();
+    });
+    attachDrag(r);
+    return r;
+  }
+
+  function paintName(r) {
+    r.nameEl.textContent = r.name || `Input ${r.ch}`;
+    r.nameEl.classList.toggle('empty', !r.name);
+  }
+
+  function setRow(r, db) {
+    r.db = db;
+    r.el.classList.toggle('unknown', db == null);
+    r.el.classList.toggle('active', db != null && db > OFF);
+    const p = dbToPos(db) * 100;
+    r.knob.style.left = p + '%'; r.fill.style.width = p + '%';
+    r.dbEl.textContent = fmt(db);
+  }
+
+  function applyFilter() {
+    const q = $('filter').value.trim().toLowerCase();
+    let shown = 0;
+    for (const r of rows.values()) {
+      const off = hidden.has(r.ch);
+      r.el.classList.toggle('off', off);
+      if (editing) { r.el.classList.remove('hidden'); continue; } // edit mode lists everything
+      const hit = !q || String(r.ch) === q || (r.name || '').toLowerCase().includes(q);
+      const act = !activeOnly || r.dragging || (r.db != null && r.db > OFF);
+      const show = !off && hit && act;
+      r.el.classList.toggle('hidden', !show);
+      if (show) shown++;
+    }
+    const none = $('noneShown');
+    let msg = '';
+    if (!editing && rows.size && !shown) {
+      msg = hidden.size >= rows.size ? 'All channels are hidden on this device. Tap Edit to choose some.'
+        : q ? 'No channels match.' : activeOnly ? 'Nothing is up in this mix yet. Turn off “In mix” to see everything.'
+        : 'All channels are hidden on this device. Tap Edit to choose some.';
+    }
+    none.textContent = msg; none.classList.toggle('hide', !msg);
+    $('edit').textContent = hidden.size ? `Edit (${hidden.size} hidden)` : 'Edit';
+  }
+
+  function setEditing(on) {
+    editing = on;
+    document.body.classList.toggle('editing', on);
+    applyFilter();
+  }
+
+  // ---- sending (throttled, final value always sent) ----
+  const sendTimers = new Map();
+  function sendLevel(r) {
+    r.hold = Date.now() + 900;
+    r.remote = undefined;
+    clearTimeout(r.holdTimer);
+    r.holdTimer = setTimeout(releaseHold, 950, r);
+    if (sendTimers.has(r.ch)) { sendTimers.get(r.ch).dirty = true; return; }
+    transmit(r);
+    const t = { dirty: false };
+    t.id = setTimeout(function tick() {
+      if (t.dirty) { t.dirty = false; transmit(r); t.id = setTimeout(tick, 40); }
+      else sendTimers.delete(r.ch);
+    }, 40);
+    sendTimers.set(r.ch, t);
+  }
+  function releaseHold(r) {
+    if (r.dragging) { r.holdTimer = setTimeout(releaseHold, 300, r); return; }
+    if (r.remote !== undefined && r.remote !== r.db) setRow(r, r.remote);
+    r.remote = undefined;
+    applyFilter();
+  }
+  function transmit(r) {
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ t: 'set', ch: r.ch, db: Math.round(r.db * 10) / 10 }));
+  }
+
+  function nudge(r, dir) {
+    if (r.db == null) return;
+    let d = r.db;
+    if (d <= OFF) d = dir > 0 ? -60 : -150;
+    else { d = Math.round(d) + dir; if (d < -60) d = -150; if (d > 10) d = 10; }
+    setRow(r, d); sendLevel(r); wake();
+  }
+
+  // Relative drag: the fader moves with your finger from where it is, so a stray tap never jumps it.
+  function attachDrag(r) {
+    let startX = 0, startPos = 0, id = null, moved = false;
+    r.track.addEventListener('pointerdown', e => {
+      if (r.db == null) return;
+      id = e.pointerId; startX = e.clientX; startPos = dbToPos(r.db); moved = false;
+      r.track.setPointerCapture(id);
+    });
+    r.track.addEventListener('pointermove', e => {
+      if (e.pointerId !== id) return;
+      const dx = e.clientX - startX;
+      if (!moved && Math.abs(dx) < 4) return;
+      if (!moved) { moved = true; r.dragging = true; wake(); }
+      const w = r.track.clientWidth || 1;
+      let db = posToDb(startPos + dx / w);
+      if (db < -90) db = -150;
+      if (Math.abs(db) < 0.4) db = 0; // gentle detent at unity
+      setRow(r, db); sendLevel(r);
+    });
+    const end = e => {
+      if (e.pointerId !== id) return;
+      id = null;
+      if (r.dragging) { r.dragging = false; r.hold = Date.now() + 900; applyFilter(); }
+    };
+    r.track.addEventListener('pointerup', end);
+    r.track.addEventListener('pointercancel', end);
+  }
+
+  // Keep the phone screen awake while someone is mixing
+  let lock = null;
+  async function wake() {
+    try { if (!lock && navigator.wakeLock) { lock = await navigator.wakeLock.request('screen'); lock.onrelease = () => lock = null; } } catch {}
+  }
+
+  function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+  $('filter').addEventListener('input', applyFilter);
+  $('activeOnly').onclick = () => {
+    activeOnly = !activeOnly; store.set('activeOnly', activeOnly ? '1' : '0');
+    $('activeOnly').classList.toggle('on', activeOnly); applyFilter();
+  };
+  $('auxSel').onchange = e => {
+    const aux = Number(e.target.value);
+    if (!lockedAux) store.set('aux', String(aux));
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ t: 'aux', aux }));
+  };
+  $('edit').onclick = () => setEditing(true);
+  $('done').onclick = () => setEditing(false);
+  $('showAll').onclick = () => { hidden.clear(); saveHidden(); applyFilter(); };
+  $('hideAll').onclick = () => { for (const ch of rows.keys()) hidden.add(ch); saveHidden(); applyFilter(); };
+  $('hideOff').onclick = () => {
+    for (const r of rows.values()) if (r.db == null || r.db <= OFF) hidden.add(r.ch);
+    saveHidden(); applyFilter();
+  };
+  $('pinform').onsubmit = e => {
+    e.preventDefault(); $('pinerr').textContent = '';
+    store.set('pin', $('pin').value);
+    ws.send(JSON.stringify({ t: 'hello', role: 'mixer', pin: $('pin').value }));
+  };
+
+  connect();
+})();
+</script>
+</body>
+</html>

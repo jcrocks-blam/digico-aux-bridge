@@ -1,0 +1,8 @@
+# Normalize everything to LF...
+*      text=auto eol=lf
+# ...except Windows scripts, which must keep Windows line endings wherever the repo is cloned
+# (later lines win, so these come after the catch-all)
+*.bat  text eol=crlf
+*.ps1  text eol=crlf
+*.png  binary
+*.exe  binary
